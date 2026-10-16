@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "ArrivalsBoard",
+    platforms: [.macOS(.v15)],
     dependencies: [.package(url: "https://github.com/apple/swift-protobuf.git", from: "1.39.0")],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
