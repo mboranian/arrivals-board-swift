@@ -4,17 +4,17 @@ import CoreLocation
 import Foundation
 import TabularData
 
+/*############Parse the local GTFS data for use throughout as DataFrames###########################################################################*/
 let stopsURL: URL = URL(fileURLWithPath: "bart-gtfs/stops.txt")
 let stops: DataFrame = try DataFrame(contentsOfCSVFile: stopsURL)
 
 let tripsURL: URL = URL(fileURLWithPath: "bart-gtfs/trips.txt")
 let trips: DataFrame = try DataFrame(contentsOfCSVFile: tripsURL)
 
-//print(stops.rows[1])
-//print(trips.rows[1])
-
+/*############Coordinates Constant to for testing. Make live later################################################################################*/
 let currCoords: (lon: Double, lat: Double) = (lon: -122.40645430093018, lat: 37.66203119672221)
 
+/*############Helper Functions####################################################################################################################*/
 func findHeadsignFromTripID(trips: DataFrame, tripID: Int) -> String {
     var headsign: String = ""
     for trip: DataFrame.Row in trips.rows {
@@ -35,29 +35,7 @@ func findHeadsignFromTripID(trips: DataFrame, tripID: Int) -> String {
     headsign = splitHeadsign[splitHeadsign.count - 1]
     return headsign
 }
-//print(findHeadsignFromTripID(trips: trips, tripID: 1965577))
 
-// func findRouteIDFromTripID(trips: DataFrame, tripID: Int) -> String {
-//     var routeID: String = ""
-//     for trip: DataFrame.Row in trips.rows {
-//         guard let id: Int = trip["trip_id", Int.self] else {
-//             print("Bad Trip ID")
-//             continue
-//         }
-//         if id == tripID {
-//             guard let route: String = trip["route_id", String.self] else {
-//                 print("Bad Route ID")
-//                 continue
-//             }
-//             routeID = route
-//             break
-//         }
-//     }
-//     return routeID
-// }
-//print(findRouteIDFromTripID(trips: trips, tripID: 1_965_577))
-
-//Finds the nearest Station. Will always return a parent station. Not a platform or exit
 func findNearestStation(stops: DataFrame, myCoords: (lon: Double, lat: Double)) -> DataFrame.Row {
     var closestDist: Double = Double.infinity
     var closestStop: DataFrame.Row? = nil
@@ -90,7 +68,17 @@ func findNearestStation(stops: DataFrame, myCoords: (lon: Double, lat: Double)) 
         fatalError("There is no closest stop")
     }
 }
-print(findNearestStation(stops: stops, myCoords: currCoords)
+
+func findPlatformNumFromPlatFormCode(stops: DataFrame, platformCode: String) -> String {
+    for stop: DataFrame.Row in stops.rows {
+        guard let stopID: String = stop["stop_id", String.self] else {continue}
+        if  stopID == platformCode {
+            guard let platformNum: Double = stop["platform_code", Double.self] else {continue}
+            return String(Int(platformNum))
+        }
+    }
+    return "";
+}
 
 func findPlatformIDsFromParentStopID(stops: DataFrame, stopID: String) -> [String] {
     var platformIDs: [String] = []
@@ -115,35 +103,84 @@ func findPlatformIDsFromParentStopID(stops: DataFrame, stopID: String) -> [Strin
 
 }
 
-func getLiveFeedUpdate() -> {
+func getLiveFeedUpdate() async throws -> TransitRealtime_FeedMessage {
     //Get the live BART updates and store them in feed
     guard let url: URL = URL(string: "https://api.bart.gov/gtfsrt/tripupdate.aspx") else {
         print("Bad API URL")
         exit(1)
     }
-    let (data, response) = try await URLSession.shared.data(from: url)
+    let (data, _) = try await URLSession.shared.data(from: url)
     let feed: TransitRealtime_FeedMessage = try TransitRealtime_FeedMessage(serializedBytes: data)
 
+    return feed
 }
 
-//print(feed.entity[1])
+/*############Setup Process: Find Closest Station and its Platfroms##################################################################################*/
+//Get the closest station and the Stop ID for it
+let closestStation: DataFrame.Row = findNearestStation(stops: stops, myCoords: currCoords)
+guard let closestParentStopID: String = closestStation["stop_id", String.self] else {
+    print("Bad Closest Parent Station Stop ID")
+    exit(1)
+}
 
-//example of unwrapping
-// let dict: [String: String] = ["SBRN": "San Bruno"]
-// let maybe: String? = dict["SBRN"]
+//Use the stop ID for the nearest station to get the stop ids for the platforms in that station(AKA the nearest platforms)
+let platformsAtClosestStation: [String] = findPlatformIDsFromParentStopID(
+    stops: stops, stopID: closestParentStopID)
 
-// if let name =  maybe {
-//     print(name)
-// } else {
-//     print("not found")
+//Get the actual feed that we will be sifting through
+let feed: TransitRealtime_FeedMessage = try await getLiveFeedUpdate()
+
+//Initialize the array that holds time updates about the closest platforms
+var relevantTripUpdates: [TransitRealtime_TripUpdate.StopTimeUpdate] = []
+//Initialize the dictionary that matched the relevant updates to their trip ids so we can find their route later
+var relevantTripUpdatesTripIDs: [TransitRealtime_TripUpdate.StopTimeUpdate: String] = [:]
+
+//Go through all the trip updates and only keep the ones relevant to orur closest station
+for trip: TransitRealtime_FeedEntity in feed.entity {  // for everytrip in the feed
+    guard trip.hasTripUpdate else { continue }  // if that trip exists
+    for update: TransitRealtime_TripUpdate.StopTimeUpdate in trip.tripUpdate.stopTimeUpdate {  // look at every update for that trip
+        guard update.hasArrival else { continue }  // if that update exists
+        if platformsAtClosestStation.contains(update.stopID) {  // if it is an update for one of the platforms at the closest station
+            relevantTripUpdates.append(update)  // add it to the array of updates that concern the closest station
+            relevantTripUpdatesTripIDs[update] = trip.tripUpdate.trip.tripID  //Link this update to its trip id to find the route later
+        }
+    }
+}
+relevantTripUpdates.sort {$0.arrival.time < $1.arrival.time}
+
+/*############Output Formatter#####################################################################################################################*/
+guard let closestStationName: String = closestStation["stop_name", String.self] else {
+    print("Bad Station Name")
+    exit(1)
+}
+print(closestStationName)
+
+/*This loop prints all departing trains in order along with it's destination - Start*/
+
+// for update: TransitRealtime_TripUpdate.StopTimeUpdate in relevantTripUpdates {
+//     let time: Double = Double(update.arrival.time)
+//     let minutesAway: Int = Int(((time - Date.now.timeIntervalSince1970) / 60).rounded())
+//     guard let stringRelevantTripUpdateTripID: String = relevantTripUpdatesTripIDs[update] else {continue}
+//     guard let intRelevantTripUpdateTripID: Int = Int(stringRelevantTripUpdateTripID) else {continue}
+//     let route: String = findHeadsignFromTripID(trips: trips, tripID: intRelevantTripUpdateTripID)
+//     print(String(minutesAway) + " --> " + route)
 // }
+/*This loop prints all departing trains in order along with it's destination - End*/
 
-//example of guard
-// let dict: [String: String] = ["SBRN": "San Bruno"]
-// let maybe: String? = dict["SBRN"]
+let relevantTripUpdatesByPlatform: [String : [TransitRealtime_TripUpdate.StopTimeUpdate]] = Dictionary(grouping: relevantTripUpdates, by: {$0.stopID})
 
-// guard let name = maybe else {
-//     print("not found")
-//     exit(1)
-// }
-// print(name)
+
+//let relevantPlatformUpdatesbyDest = Dictionary(grouping: relevantTripUpdatesByPlatform, by: {relevantTripUpdatesTripIDs[]})
+
+
+for (platform, platformUpdates) in relevantTripUpdatesByPlatform {
+    print("Platform " + (findPlatformNumFromPlatFormCode(stops: stops, platformCode: platform)))
+    for update in platformUpdates {
+        let time: Double = Double(update.arrival.time)
+        let minutesAway: Int = Int(((time - Date.now.timeIntervalSince1970) / 60).rounded())
+        guard let stringRelevantTripUpdateTripID: String = relevantTripUpdatesTripIDs[update] else {continue}
+        guard let intRelevantTripUpdateTripID: Int = Int(stringRelevantTripUpdateTripID) else {continue}
+        let route: String = findHeadsignFromTripID(trips: trips, tripID: intRelevantTripUpdateTripID)
+        print(String(minutesAway) + " --> " + route)
+    }
+}
