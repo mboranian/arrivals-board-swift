@@ -103,6 +103,12 @@ func findPlatformIDsFromParentStopID(stops: DataFrame, stopID: String) -> [Strin
 
 }
 
+func getDestStringFromTimeStopUpdate(update: TransitRealtime_TripUpdate.StopTimeUpdate, tripIDs: [TransitRealtime_TripUpdate.StopTimeUpdate: String], trips: DataFrame) -> String {
+    guard let tripID: String = tripIDs[update] else {exit(1)}
+    guard let intTripID: Int = Int(tripID) else {exit(1)}
+    return findHeadsignFromTripID(trips: trips, tripID: intTripID)
+}
+
 func getLiveFeedUpdate() async throws -> TransitRealtime_FeedMessage {
     //Get the live BART updates and store them in feed
     guard let url: URL = URL(string: "https://api.bart.gov/gtfsrt/tripupdate.aspx") else {
@@ -155,25 +161,18 @@ guard let closestStationName: String = closestStation["stop_name", String.self] 
 }
 print(closestStationName)
 
-/*This loop prints all departing trains in order along with it's destination - Start*/
+// Create a dictionary were the Stop ID is a the key and the value is and array of sorted, arriving trains
+var relevantTripUpdatesByPlatform: [String : [TransitRealtime_TripUpdate.StopTimeUpdate]] = Dictionary(grouping: relevantTripUpdates, by: {$0.stopID})
 
-// for update: TransitRealtime_TripUpdate.StopTimeUpdate in relevantTripUpdates {
-//     let time: Double = Double(update.arrival.time)
-//     let minutesAway: Int = Int(((time - Date.now.timeIntervalSince1970) / 60).rounded())
-//     guard let stringRelevantTripUpdateTripID: String = relevantTripUpdatesTripIDs[update] else {continue}
-//     guard let intRelevantTripUpdateTripID: Int = Int(stringRelevantTripUpdateTripID) else {continue}
-//     let route: String = findHeadsignFromTripID(trips: trips, tripID: intRelevantTripUpdateTripID)
-//     print(String(minutesAway) + " --> " + route)
-// }
-/*This loop prints all departing trains in order along with it's destination - End*/
-
-let relevantTripUpdatesByPlatform: [String : [TransitRealtime_TripUpdate.StopTimeUpdate]] = Dictionary(grouping: relevantTripUpdates, by: {$0.stopID})
+//Sort the arriving trains alphabetically by destination
+for (platform, platformUpdates): (_ , [TransitRealtime_TripUpdate.StopTimeUpdate]) in relevantTripUpdatesByPlatform{
+    relevantTripUpdatesByPlatform[platform] = platformUpdates.sorted {getDestStringFromTimeStopUpdate(update: $0, tripIDs: relevantTripUpdatesTripIDs, trips: trips) < getDestStringFromTimeStopUpdate(update: $1, tripIDs: relevantTripUpdatesTripIDs, trips: trips)}
+}
 
 
-//let relevantPlatformUpdatesbyDest = Dictionary(grouping: relevantTripUpdatesByPlatform, by: {relevantTripUpdatesTripIDs[]})
 
-
-for (platform, platformUpdates) in relevantTripUpdatesByPlatform {
+// for each platform, converts its updates to readlable times and add route labels
+for (platform, platformUpdates): (String, [TransitRealtime_TripUpdate.StopTimeUpdate]) in (relevantTripUpdatesByPlatform.sorted {$0.key < $1.key}) {
     print("Platform " + (findPlatformNumFromPlatFormCode(stops: stops, platformCode: platform)))
     for update in platformUpdates {
         let time: Double = Double(update.arrival.time)
