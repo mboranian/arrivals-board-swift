@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:arrivals-board-swift}",
+            "name": "Debug ArrivalsBoard",
+            "target": "ArrivalsBoard",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug ArrivalsBoard"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:arrivals-board-swift}",
+            "name": "Release ArrivalsBoard",
+            "target": "ArrivalsBoard",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release ArrivalsBoard"
+        }
+    ]
+}

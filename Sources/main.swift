@@ -192,10 +192,14 @@ for (platform, var arrivals): (String, [Arrival]) in arrivalsByPlatform {
         }
     for (_, arrs): (String, [Arrival]) in arrivalsByDest {
         for arr: Arrival in arrs.prefix(3) {
-            print("\(getMinutesAway(update: arr.update))" + " --> " + arr.headsign)
+            if getMinutesAway(update: arr.update) <= 1 {
+                print("Leaving --> " + arr.headsign)
+            } else {
+                print("\(getMinutesAway(update: arr.update))" + " --> " + arr.headsign)
+            }
         }
     }
 
 }
 
-//TODO: Add loop, decide how to handle negative arrival times, mark some trains as "leaving"
+//TODO: Add loop
