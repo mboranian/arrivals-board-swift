@@ -14,6 +14,15 @@ let trips: DataFrame = try DataFrame(contentsOfCSVFile: tripsURL)
 /*############Coordinates Constant to for testing. Make live later################################################################################*/
 let currCoords: (lon: Double, lat: Double) = (lon: -122.40645430093018, lat: 37.66203119672221)
 
+struct Arrival {
+    let station: String
+    let platformID: String
+    let platformNum: String
+    let tripID: String
+    let headsign: String
+    let update: TransitRealtime_TripUpdate.StopTimeUpdate
+}
+
 /*############Helper Functions####################################################################################################################*/
 func findHeadsignFromTripID(trips: DataFrame, tripID: Int) -> String {
     var headsign: String = ""
@@ -71,13 +80,13 @@ func findNearestStation(stops: DataFrame, myCoords: (lon: Double, lat: Double)) 
 
 func findPlatformNumFromPlatFormCode(stops: DataFrame, platformCode: String) -> String {
     for stop: DataFrame.Row in stops.rows {
-        guard let stopID: String = stop["stop_id", String.self] else {continue}
-        if  stopID == platformCode {
-            guard let platformNum: Double = stop["platform_code", Double.self] else {continue}
+        guard let stopID: String = stop["stop_id", String.self] else { continue }
+        if stopID == platformCode {
+            guard let platformNum: Double = stop["platform_code", Double.self] else { continue }
             return String(Int(platformNum))
         }
     }
-    return "";
+    return ""
 }
 
 func findPlatformIDsFromParentStopID(stops: DataFrame, stopID: String) -> [String] {
@@ -103,10 +112,9 @@ func findPlatformIDsFromParentStopID(stops: DataFrame, stopID: String) -> [Strin
 
 }
 
-func getDestStringFromTimeStopUpdate(update: TransitRealtime_TripUpdate.StopTimeUpdate, tripIDs: [TransitRealtime_TripUpdate.StopTimeUpdate: String], trips: DataFrame) -> String {
-    guard let tripID: String = tripIDs[update] else {exit(1)}
-    guard let intTripID: Int = Int(tripID) else {exit(1)}
-    return findHeadsignFromTripID(trips: trips, tripID: intTripID)
+func getMinutesAway(update: TransitRealtime_TripUpdate.StopTimeUpdate) -> Int {
+    let time: Double = Double(update.arrival.time)
+    return Int(((time - Date.now.timeIntervalSince1970) / 60).rounded())
 }
 
 func getLiveFeedUpdate() async throws -> TransitRealtime_FeedMessage {
@@ -122,10 +130,17 @@ func getLiveFeedUpdate() async throws -> TransitRealtime_FeedMessage {
 }
 
 /*############Setup Process: Find Closest Station and its Platfroms##################################################################################*/
-//Get the closest station and the Stop ID for it
+//Get the closest station Data row
 let closestStation: DataFrame.Row = findNearestStation(stops: stops, myCoords: currCoords)
+
+//Get stop ID for closest Station
 guard let closestParentStopID: String = closestStation["stop_id", String.self] else {
     print("Bad Closest Parent Station Stop ID")
+    exit(1)
+}
+//Get the name for the closest station
+guard let closestStationName: String = closestStation["stop_name", String.self] else {
+    print("Bad Station Name")
     exit(1)
 }
 
@@ -133,13 +148,11 @@ guard let closestParentStopID: String = closestStation["stop_id", String.self] e
 let platformsAtClosestStation: [String] = findPlatformIDsFromParentStopID(
     stops: stops, stopID: closestParentStopID)
 
+//Initialize array of arrivals at the closest station
+var arrivalsAtClosestStation: [Arrival] = []
+
 //Get the actual feed that we will be sifting through
 let feed: TransitRealtime_FeedMessage = try await getLiveFeedUpdate()
-
-//Initialize the array that holds time updates about the closest platforms
-var relevantTripUpdates: [TransitRealtime_TripUpdate.StopTimeUpdate] = []
-//Initialize the dictionary that matched the relevant updates to their trip ids so we can find their route later
-var relevantTripUpdatesTripIDs: [TransitRealtime_TripUpdate.StopTimeUpdate: String] = [:]
 
 //Go through all the trip updates and only keep the ones relevant to orur closest station
 for trip: TransitRealtime_FeedEntity in feed.entity {  // for everytrip in the feed
@@ -147,39 +160,42 @@ for trip: TransitRealtime_FeedEntity in feed.entity {  // for everytrip in the f
     for update: TransitRealtime_TripUpdate.StopTimeUpdate in trip.tripUpdate.stopTimeUpdate {  // look at every update for that trip
         guard update.hasArrival else { continue }  // if that update exists
         if platformsAtClosestStation.contains(update.stopID) {  // if it is an update for one of the platforms at the closest station
-            relevantTripUpdates.append(update)  // add it to the array of updates that concern the closest station
-            relevantTripUpdatesTripIDs[update] = trip.tripUpdate.trip.tripID  //Link this update to its trip id to find the route later
+            guard let intTripID: Int = Int(trip.tripUpdate.trip.tripID) else { continue }
+            let headsign: String = findHeadsignFromTripID(trips: trips, tripID: intTripID)
+            let platNum: String = findPlatformNumFromPlatFormCode(
+                stops: stops, platformCode: update.stopID)
+            arrivalsAtClosestStation.append(
+                Arrival(
+                    station: closestStationName, platformID: update.stopID, platformNum: platNum,
+                    tripID: trip.tripUpdate.trip.tripID, headsign: headsign, update: update))
+
         }
     }
 }
-relevantTripUpdates.sort {$0.arrival.time < $1.arrival.time}
 
 /*############Output Formatter#####################################################################################################################*/
-guard let closestStationName: String = closestStation["stop_name", String.self] else {
-    print("Bad Station Name")
-    exit(1)
-}
+
 print(closestStationName)
 
-// Create a dictionary were the Stop ID is a the key and the value is and array of sorted, arriving trains
-var relevantTripUpdatesByPlatform: [String : [TransitRealtime_TripUpdate.StopTimeUpdate]] = Dictionary(grouping: relevantTripUpdates, by: {$0.stopID})
-
-//Sort the arriving trains alphabetically by destination
-for (platform, platformUpdates): (_ , [TransitRealtime_TripUpdate.StopTimeUpdate]) in relevantTripUpdatesByPlatform{
-    relevantTripUpdatesByPlatform[platform] = platformUpdates.sorted {getDestStringFromTimeStopUpdate(update: $0, tripIDs: relevantTripUpdatesTripIDs, trips: trips) < getDestStringFromTimeStopUpdate(update: $1, tripIDs: relevantTripUpdatesTripIDs, trips: trips)}
-}
-
-
-
-// for each platform, converts its updates to readlable times and add route labels
-for (platform, platformUpdates): (String, [TransitRealtime_TripUpdate.StopTimeUpdate]) in (relevantTripUpdatesByPlatform.sorted {$0.key < $1.key}) {
-    print("Platform " + (findPlatformNumFromPlatFormCode(stops: stops, platformCode: platform)))
-    for update in platformUpdates {
-        let time: Double = Double(update.arrival.time)
-        let minutesAway: Int = Int(((time - Date.now.timeIntervalSince1970) / 60).rounded())
-        guard let stringRelevantTripUpdateTripID: String = relevantTripUpdatesTripIDs[update] else {continue}
-        guard let intRelevantTripUpdateTripID: Int = Int(stringRelevantTripUpdateTripID) else {continue}
-        let route: String = findHeadsignFromTripID(trips: trips, tripID: intRelevantTripUpdateTripID)
-        print(String(minutesAway) + " --> " + route)
+let arrivalsByPlatform: [(String, [Arrival])] =
+    (Dictionary(grouping: arrivalsAtClosestStation, by: { $0.platformNum })).sorted {
+        $0.key < $1.key
     }
+
+// sort the arrivals at each platform by arrival time
+for (platform, var arrivals): (String, [Arrival]) in arrivalsByPlatform {
+    arrivals.sort { getMinutesAway(update: $0.update) < getMinutesAway(update: $1.update) }
+    print("Platform " + platform)
+    let arrivalsByDest: [(String, [Arrival])] =
+        (Dictionary(grouping: arrivals, by: { $0.headsign })).sorted {
+            (getMinutesAway(update: $0.value[0].update)) < (getMinutesAway(update: $1.value[0].update))
+        }
+    for (_, arrs): (String, [Arrival]) in arrivalsByDest {
+        for arr: Arrival in arrs.prefix(3) {
+            print("\(getMinutesAway(update: arr.update))" + " --> " + arr.headsign)
+        }
+    }
+
 }
+
+//TODO: Add loop, decide how to handle negative arrival times, mark some trains as "leaving"
