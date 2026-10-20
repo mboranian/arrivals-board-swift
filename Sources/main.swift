@@ -1,6 +1,6 @@
-import CoreLocation
 // The Swift Programming Language
 // https://docs.swift.org/swift-book
+import CoreLocation
 import Foundation
 import TabularData
 
@@ -160,7 +160,7 @@ for trip: TransitRealtime_FeedEntity in feed.entity {  // for everytrip in the f
     for update: TransitRealtime_TripUpdate.StopTimeUpdate in trip.tripUpdate.stopTimeUpdate {  // look at every update for that trip
         guard update.hasArrival else { continue }  // if that update exists
         if platformsAtClosestStation.contains(update.stopID) {  // if it is an update for one of the platforms at the closest station
-            guard let intTripID: Int = Int(trip.tripUpdate.trip.tripID) else { continue }
+            guard let intTripID: Int = Int(trip.tripUpdate.trip.tripID) else { continue } // create an Arrival object to track all info
             let headsign: String = findHeadsignFromTripID(trips: trips, tripID: intTripID)
             let platNum: String = findPlatformNumFromPlatFormCode(
                 stops: stops, platformCode: update.stopID)
@@ -177,19 +177,23 @@ for trip: TransitRealtime_FeedEntity in feed.entity {  // for everytrip in the f
 
 print(closestStationName)
 
+//Seperate all arrivals to closest station by platform
 let arrivalsByPlatform: [(String, [Arrival])] =
     (Dictionary(grouping: arrivalsAtClosestStation, by: { $0.platformNum })).sorted {
         $0.key < $1.key
     }
 
-// sort the arrivals at each platform by arrival time
+//Go through and appropriately sort all the arrivals
 for (platform, var arrivals): (String, [Arrival]) in arrivalsByPlatform {
+    // for each platform, sort all the arrivals by arrival time
     arrivals.sort { getMinutesAway(update: $0.update) < getMinutesAway(update: $1.update) }
     print("Platform " + platform)
+    //Within each platform, sort the arrivals into groups by destination, and sort the groups by where the very next train goes
     let arrivalsByDest: [(String, [Arrival])] =
         (Dictionary(grouping: arrivals, by: { $0.headsign })).sorted {
             (getMinutesAway(update: $0.value[0].update)) < (getMinutesAway(update: $1.value[0].update))
         }
+    //Go through each destination on each platform and print the next three arrival times for each desination
     for (_, arrs): (String, [Arrival]) in arrivalsByDest {
         for arr: Arrival in arrs.prefix(3) {
             if getMinutesAway(update: arr.update) <= 1 {
