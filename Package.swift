@@ -5,13 +5,23 @@ import PackageDescription
 
 let package = Package(
     name: "ArrivalsBoard",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v15), .iOS(.v18)],
+    
+    products: [
+        .library(name: "ArrivalsCore", targets: ["ArrivalsCore"]),
+        .executable(name: "ArrivalsBoard", targets: ["ArrivalsBoard"])
+    ],
+    
     dependencies: [.package(url: "https://github.com/apple/swift-protobuf.git", from: "1.39.0")],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
+        .target(
+            name: "ArrivalsCore",
+            dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")]),
+        
         .executableTarget(
             name: "ArrivalsBoard",
-            dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")]),
+            dependencies: ["ArrivalsCore"]),
     ]
 )
