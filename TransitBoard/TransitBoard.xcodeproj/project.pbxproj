@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5514D754308FCA7F00129527 /* ArrivalsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5514D753308FCA7F00129527 /* ArrivalsCore */; };
+		555944CF309012F400498CC1 /* ArrivalsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 555944CE309012F400498CC1 /* ArrivalsCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,7 +26,7 @@
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
-				5514D754308FCA7F00129527 /* ArrivalsCore in Frameworks */,
+				555944CF309012F400498CC1 /* ArrivalsCore in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -36,6 +36,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000010 /* TransitBoard */,
+				555944CD309012F400498CC1 /* Frameworks */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +47,13 @@
 				000000000000000000000120 /* TransitBoard.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		555944CD309012F400498CC1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -66,7 +74,7 @@
 			);
 			name = TransitBoard;
 			packageProductDependencies = (
-				5514D753308FCA7F00129527 /* ArrivalsCore */,
+				555944CE309012F400498CC1 /* ArrivalsCore */,
 			);
 			productName = MyApp;
 			productReference = 000000000000000000000120 /* TransitBoard.app */;
@@ -97,7 +105,7 @@
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				5514D752308FCA7F00129527 /* XCLocalSwiftPackageReference "../../arrivals-board-swift" */,
+				555944CA3090126100498CC1 /* XCLocalSwiftPackageReference "../../arrivals-board-swift" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
@@ -186,7 +194,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PROJECT_UNIQUE_VALUE = GMN55WWR;
+				PROJECT_UNIQUE_VALUE = LOUJEV2H;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -249,7 +257,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PROJECT_UNIQUE_VALUE = GMN55WWR;
+				PROJECT_UNIQUE_VALUE = LOUJEV2H;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				TVOS_DEPLOYMENT_TARGET = 27.0;
@@ -285,13 +293,13 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Debug;
 		};
@@ -322,13 +330,13 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Release;
 		};
@@ -354,15 +362,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		5514D752308FCA7F00129527 /* XCLocalSwiftPackageReference "../../arrivals-board-swift" */ = {
+		555944CA3090126100498CC1 /* XCLocalSwiftPackageReference "../../arrivals-board-swift" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "../../arrivals-board-swift";
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		5514D753308FCA7F00129527 /* ArrivalsCore */ = {
+		555944CE309012F400498CC1 /* ArrivalsCore */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 555944CA3090126100498CC1 /* XCLocalSwiftPackageReference "../../arrivals-board-swift" */;
 			productName = ArrivalsCore;
 		};
 /* End XCSwiftPackageProductDependency section */

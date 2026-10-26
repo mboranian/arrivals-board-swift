@@ -1,6 +1,6 @@
 import SwiftUI
 
-@main struct TransitBoard: App {
+@main struct MyApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

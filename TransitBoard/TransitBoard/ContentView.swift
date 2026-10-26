@@ -1,4 +1,5 @@
 import SwiftUI
+import ArrivalsCore
 import Playgrounds
 
 struct ContentView: View {
