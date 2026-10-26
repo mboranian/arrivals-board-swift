@@ -90,8 +90,8 @@ func findPlatformNumFromPlatFormCode(stops: DataFrame, platformCode: String) -> 
     for stop: DataFrame.Row in stops.rows {
         guard let stopID: String = stop["stop_id", String.self] else { continue }
         if stopID == platformCode {
-            guard let platformNum: Double = stop["platform_code", Double.self] else { continue }
-            return String(Int(platformNum))
+            guard let platformNum: String = stop["platform_code", String.self] else { continue }
+            return platformNum
         }
     }
     return ""

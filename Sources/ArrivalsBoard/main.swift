@@ -6,7 +6,7 @@ import ArrivalsCore
 
 /*############Parse the local GTFS data for use throughout as DataFrames###########################################################################*/
 let stopsURL: URL = URL(fileURLWithPath: "bart-gtfs/stops.txt")
-let stops: DataFrame = try DataFrame(contentsOfCSVFile: stopsURL)
+let stops: DataFrame = try DataFrame(contentsOfCSVFile: stopsURL, types: ["platform_code": .string])
 
 let tripsURL: URL = URL(fileURLWithPath: "bart-gtfs/trips.txt")
 let trips: DataFrame = try DataFrame(contentsOfCSVFile: tripsURL, types: ["trip_id": .string])
