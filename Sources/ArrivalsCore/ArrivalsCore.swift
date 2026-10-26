@@ -8,6 +8,12 @@ import CoreLocation
 import Foundation
 import TabularData
 
+public enum ArrivalsErr: Error {
+    case badFeedURL
+    case noClosestStation
+    case badParentStationID
+    case badStationName
+}
 
 struct Departure {
     let station: String
@@ -19,33 +25,42 @@ struct Departure {
 }
 
 struct DestinationGroup {
-    let destination: String        // "SFO"
-    let departures: [Departure]    // 4, 15, 24
+    let destination: String  // "SFO"
+    let departures: [Departure]  // 4, 15, 24
 }
 
 struct PlatformGroup {
-    let platform: String                     // "1"
-    var destinations: [DestinationGroup]     // SFO group, Millbrae group
+    let platform: String  // "1"
+    var destinations: [DestinationGroup]  // SFO group, Millbrae group
 }
 
 public struct StationBoard {
-    let stationName: String           // "San Bruno"
-    var platforms: [PlatformGroup]    // Platform 1, Platform 2
+    let stationName: String  // "San Bruno"
+    var platforms: [PlatformGroup]  // Platform 1, Platform 2
 }
 
-public func buildTripIDToHeadsignDict(trips: DataFrame) -> [String : String] {
-    var idToHeadsign: [String : String] = [:]
-    var headsign: String = ""
+public func loadStops(url: URL) throws -> DataFrame {
+    return try DataFrame(contentsOfCSVFile: url, types: ["platform_code": .string])
+}
+
+public func loadHeadsigns(url: URL) throws -> [String: String] {
+    let trips: DataFrame = try DataFrame(contentsOfCSVFile: url, types: ["trip_id": .string])
+    let headsignDict: [String: String] = buildTripIDToHeadsignDict(trips: trips)
+    return headsignDict
+}
+
+func buildTripIDToHeadsignDict(trips: DataFrame) -> [String: String] {
+    var idToHeadsign: [String: String] = [:]
     for trip: DataFrame.Row in trips.rows {
         guard let id: String = trip["trip_id", String.self] else {
             print("Bad Trip ID")
             continue
         }
-        guard let sign : String = trip["trip_headsign", String.self] else {
+        guard let sign: String = trip["trip_headsign", String.self] else {
             print("Bad Headsign")
             continue
         }
-        headsign = sign
+        var headsign: String = sign
         let splitHeadsign: [String] = headsign.components(separatedBy: " / ")
         headsign = splitHeadsign[splitHeadsign.count - 1]
         idToHeadsign[id] = headsign
@@ -53,7 +68,7 @@ public func buildTripIDToHeadsignDict(trips: DataFrame) -> [String : String] {
     return idToHeadsign
 }
 
-func findNearestStation(stops: DataFrame, myCoords: (lon: Double, lat: Double)) -> DataFrame.Row {
+func findNearestStation(stops: DataFrame, myCoords: (lon: Double, lat: Double)) throws -> DataFrame.Row {
     var closestDist: Double = Double.infinity
     var closestStop: DataFrame.Row? = nil
     let here: CLLocation = CLLocation(latitude: myCoords.lat, longitude: myCoords.lon)
@@ -82,7 +97,7 @@ func findNearestStation(stops: DataFrame, myCoords: (lon: Double, lat: Double)) 
     if let closestStop: DataFrame.Row {
         return closestStop
     } else {
-        fatalError("There is no closest stop")
+        throw ArrivalsErr.noClosestStation
     }
 }
 
@@ -128,8 +143,7 @@ func getMinutesAway(time: Int64) -> Int {
 func getLiveFeedUpdate() async throws -> TransitRealtime_FeedMessage {
     //Get the live BART updates and store them in feed
     guard let url: URL = URL(string: "https://api.bart.gov/gtfsrt/tripupdate.aspx") else {
-        print("Bad API URL")
-        exit(1)
+        throw ArrivalsErr.badFeedURL
     }
     let (data, _) = try await URLSession.shared.data(from: url)
     let feed: TransitRealtime_FeedMessage = try TransitRealtime_FeedMessage(serializedBytes: data)
@@ -140,20 +154,18 @@ func getLiveFeedUpdate() async throws -> TransitRealtime_FeedMessage {
 /*############Setup Process: Find Closest Station and its Platfroms##################################################################################*/
 
 func getClosestStationUpdates(
-    headsigns: [String : String], stops: DataFrame, coords: (lon: Double, lat: Double)
+    headsigns: [String: String], stops: DataFrame, coords: (lon: Double, lat: Double)
 ) async throws -> (name: String, departures: [Departure]) {
     //Get the closest station Data row
-    let closestStation: DataFrame.Row = findNearestStation(stops: stops, myCoords: coords)
+    let closestStation: DataFrame.Row =  try findNearestStation(stops: stops, myCoords: coords)
 
     //Get stop ID for closest Station
     guard let closestParentStopID: String = closestStation["stop_id", String.self] else {
-        print("Bad Closest Parent Station Stop ID")
-        exit(1)
+        throw ArrivalsErr.badParentStationID
     }
     //Get the name for the closest station
     guard let closestStationName: String = closestStation["stop_name", String.self] else {
-        print("Bad Station Name")
-        exit(1)
+        throw ArrivalsErr.badStationName
     }
 
     //Use the stop ID for the nearest station to get the stop ids for the platforms in that station(AKA the nearest platforms)
@@ -165,7 +177,6 @@ func getClosestStationUpdates(
 
     //Get the actual feed that we will be sifting through
     let feed: TransitRealtime_FeedMessage = try await getLiveFeedUpdate()
-    
 
     //Go through all the trip updates and only keep the ones relevant to orur closest station
     for trip: TransitRealtime_FeedEntity in feed.entity {  // for everytrip in the feed
@@ -173,15 +184,19 @@ func getClosestStationUpdates(
         for update: TransitRealtime_TripUpdate.StopTimeUpdate in trip.tripUpdate.stopTimeUpdate {  // look at every update for that trip
             guard update.hasDeparture else { continue }  // if that update exists
             if platformsAtClosestStation.contains(update.stopID)
-                && Double(update.departure.time) > (Date().timeIntervalSince1970 - 40){  // if it is an update for one of the platforms at the closest station 
-                guard let headsign: String = headsigns[trip.tripUpdate.trip.tripID] else {continue}// create an Departure object to track all info
+                && Double(update.departure.time) > (Date().timeIntervalSince1970 - 40)
+            {  // if it is an update for one of the platforms at the closest station
+                guard let headsign: String = headsigns[trip.tripUpdate.trip.tripID] else {
+                    continue
+                }  // create an Departure object to track all info
                 let platNum: String = findPlatformNumFromPlatFormCode(
                     stops: stops, platformCode: update.stopID)
                 departuresAtClosestStation.append(
                     Departure(
                         station: closestStationName, platformID: update.stopID,
                         platformNum: platNum,
-                        tripID: trip.tripUpdate.trip.tripID, headsign: headsign, time: update.departure.time))
+                        tripID: trip.tripUpdate.trip.tripID, headsign: headsign,
+                        time: update.departure.time))
 
             }
         }
@@ -190,13 +205,14 @@ func getClosestStationUpdates(
 }
 
 //Creates a Station Board object and returns it
-public func getDepartures(headsigns: [String : String], stops: DataFrame, coords: (lon: Double, lat: Double)) async throws -> StationBoard{
+public func getDepartures(
+    headsigns: [String: String], stops: DataFrame, coords: (lon: Double, lat: Double)
+) async throws -> StationBoard {
 
     let (closestStationName, departuresAtClosestStation): (String, [Departure]) =
         try await getClosestStationUpdates(headsigns: headsigns, stops: stops, coords: coords)
 
     var stationBoard: StationBoard = StationBoard(stationName: closestStationName, platforms: [])
-
 
     //Seperate all departures from closest station by platform
     let departuresByPlatform: [(String, [Departure])] =
@@ -210,13 +226,13 @@ public func getDepartures(headsigns: [String : String], stops: DataFrame, coords
         departures.sort { $0.time < $1.time }
 
         var platformGroup: PlatformGroup = PlatformGroup(platform: platform, destinations: [])
-        
+
         //Within each platform, sort the departures into groups by destination, and sort the groups by where the very next train goes
         let departuresByDest: [(String, [Departure])] =
             (Dictionary(grouping: departures, by: { $0.headsign })).sorted {
                 ($0.value[0].time) < ($1.value[0].time)
             }
-        //Go through each destination on each platform and print the next three departure times for each desination
+        //Go through each destination on each platform and populate the stationBoard object
         for (dest, deps): (String, [Departure]) in departuresByDest {
             platformGroup.destinations.append(DestinationGroup(destination: dest, departures: deps))
         }
@@ -225,14 +241,13 @@ public func getDepartures(headsigns: [String : String], stops: DataFrame, coords
     return stationBoard
 }
 
-
 public func printStationBoard(board: StationBoard) {
     print(board.stationName)
     for platform: PlatformGroup in board.platforms {
         print("Platform " + platform.platform)
         for destination in platform.destinations {
             print(destination.destination)
-            for departure in destination.departures.prefix(3){
+            for departure in destination.departures.prefix(3) {
                 if getMinutesAway(time: departure.time) <= 1 {
                     print("Leaving")
                 } else {
